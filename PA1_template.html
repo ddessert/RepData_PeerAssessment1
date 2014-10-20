@@ -294,7 +294,7 @@ The median steps per day is 10765.</p>
 
 <h2>Display the average daily activity pattern</h2>
 
-<p>Create a new data frame holding the 5-minute time interval and the sum of all steps from all days at that specific time interval.</p>
+<p>Create a new data frame holding the 5-minute time interval and the sum of all steps from all days at that specific time interval. The first few lines of this data frame are output below.</p>
 
 <pre><code class="r">time_steps &lt;- aggregate(steps ~ minutes, FUN = sum, data = df_activity)
 head(time_steps)
@@ -308,6 +308,8 @@ head(time_steps)
 ## 5      20     4
 ## 6      25   111
 </code></pre>
+
+<p>Plot the average daily activity pattern. For each 5-minute interval, the steps over all days are averaged. The result for all 5-minute intervals in a day are plotted below. The maximum point is indicated in the plot.</p>
 
 <pre><code class="r"># Find the maximum step time and value
 i_max &lt;- which.max(time_steps[,2])
@@ -350,9 +352,7 @@ print(p)
 <h2>Imputing missing values</h2>
 
 <p>Missing (NA) values with non-missing adjacent step values are linearly interpolated in
-time to impute their new value. After this, the first and last day&#39;s step values 
-remained missing. Their missing step values are imputed by using the time-of-day
-adjacent step values.</p>
+time to impute their new value.</p>
 
 <pre><code class="r"># Count of NA in original step data
 num_na &lt;- sum(df_activity$na_steps)
@@ -365,15 +365,24 @@ zz &lt;- round(na.approx(df_activity$steps_interp, df_activity$interval, na.rm =
 # Replace only the remaining NA values
 df_activity$steps_interp[is.na(df_activity$steps_interp)] &lt;- zz[is.na(df_activity$steps_interp)]
 
-## 
-matrix_time_by_steps_interp &lt;- matrix(df_activity$steps_interp, nrow = 24*12, byrow = FALSE)
-# Total Steps for each day
-daily_steps_interp &lt;- colSums(matrix_time_by_steps_interp)
+# Calculate the total # steps (imputed) for each day
+daily_steps_interp &lt;- aggregate(steps_interp ~ date, FUN = sum, data = df_activity)
+head(daily_steps_interp)
 </code></pre>
 
+<pre><code>##         date steps_interp
+## 1 2012-10-01        10762
+## 2 2012-10-02          126
+## 3 2012-10-03        11352
+## 4 2012-10-04        12116
+## 5 2012-10-05        13294
+## 6 2012-10-06        15420
+</code></pre>
+
+<p>Plot a histogram showing the distribution of the total number of steps per day</p>
+
 <pre><code class="r"># Histogram plot
-p &lt;- ggplot(data.frame(x=daily_steps_interp, y=1:length(daily_steps_interp)), aes(x)) 
-p &lt;- p + geom_histogram(binwidth = 1000)
+p &lt;- qplot(steps_interp, data = daily_steps_interp, geom = &quot;histogram&quot;, binwidth = 1000)
 p &lt;- p + xlab(&quot;Daily Steps&quot;)                    # x-axis label
 p &lt;- p + ylab(&quot;Count&quot;)                          # y-axis label
 p &lt;- p + ggtitle(expression(atop(&quot;Histogram of Daily Steps&quot;,
@@ -384,8 +393,8 @@ print(p)
 <p><img src="data:image/png;base64,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" alt="plot of chunk plot_imputed_values"/> </p>
 
 <pre><code class="r"># Calculate the mean and median of the imputed data
-mean_daily_steps_interp &lt;- sprintf(&quot;%.1f&quot;, mean(daily_steps_interp, na.rm = TRUE))
-median_daily_steps_interp &lt;- sprintf(&quot;%d&quot;, median(daily_steps_interp, na.rm = TRUE))
+mean_daily_steps_interp &lt;- sprintf(&quot;%.1f&quot;, mean(daily_steps_interp[,2]))
+median_daily_steps_interp &lt;- sprintf(&quot;%d&quot;, median(daily_steps_interp[,2]))
 </code></pre>
 
 <p>In the original data set, there are 2304 missing step values (indicated with NA).
@@ -411,19 +420,53 @@ ggplot() + geom_point(data=m, aes(x=time, y=steps, group=type, colour=type))
 
 <h2>Show the differences in activity patterns between weekdays and weekends</h2>
 
+<p>A new field is added to identify the weekend/weekday entries. Then the df_activity 
+data.frame is minimized and the mean step values computed for {weekday, weekend} 
+and {minutes} into steps_by_day_interval. The head of the changed data frames are
+output.</p>
+
 <pre><code class="r"># Identify the weekdays and weekends
 df_activity$weekday &lt;- factor(weekdays(df_activity$time) %in% c(&#39;Saturday&#39;,&#39;Sunday&#39;),
                               levels=c(&quot;TRUE&quot;, &quot;FALSE&quot;), 
                               labels=c(&quot;Weekend&quot;,&quot;Weekday&quot;))
+head(df_activity)
+</code></pre>
 
+<pre><code>##   steps       date interval                time na_steps minutes
+## 1    NA 2012-10-01        0 2012-10-01 00:00:00     TRUE       0
+## 2    NA 2012-10-01        5 2012-10-01 00:05:00     TRUE       5
+## 3    NA 2012-10-01       10 2012-10-01 00:10:00     TRUE      10
+## 4    NA 2012-10-01       15 2012-10-01 00:15:00     TRUE      15
+## 5    NA 2012-10-01       20 2012-10-01 00:20:00     TRUE      20
+## 6    NA 2012-10-01       25 2012-10-01 00:25:00     TRUE      25
+##   steps_interp weekday
+## 1            2 Weekday
+## 2            0 Weekday
+## 3            0 Weekday
+## 4            0 Weekday
+## 5            0 Weekday
+## 6            2 Weekday
+</code></pre>
 
-# Calculate the mean # steps for each weekday/interval pair
-# steps_by_day_interval &lt;- aggregate(steps ~ interval + weekday, FUN = mean, data = m)
+<pre><code class="r"># Calculate the mean # steps for each weekday/interval pair
 steps_by_day_interval &lt;- aggregate(steps ~ minutes + weekday, FUN = mean, data = df_activity)
+head(steps_by_day_interval)
+</code></pre>
 
-# Calculate the interval values for each 6-hour period
+<pre><code>##   minutes weekday steps
+## 1       0 Weekend 0.000
+## 2       5 Weekend 0.000
+## 3      10 Weekend 0.000
+## 4      15 Weekend 0.000
+## 5      20 Weekend 0.000
+## 6      25 Weekend 3.714
+</code></pre>
+
+<pre><code class="r"># Calculate the interval values for each 6-hour period
 t_breaks &lt;- seq(1, max(df_activity$minutes)+5, length.out=5)
 </code></pre>
+
+<p>Two plots to compare the average steps for each 5-minute interval on weekends and weekdays.</p>
 
 <pre><code class="r"># Plot the weekend &amp; weekday mean steps throughout the day
 p &lt;- ggplot(steps_by_day_interval, aes(minutes, steps))

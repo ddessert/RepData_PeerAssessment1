@@ -67,11 +67,13 @@ The mean steps per day is `r mean_daily_steps`.
 The median steps per day is `r median_daily_steps`.
 
 ## Display the average daily activity pattern
-Create a new data frame holding the 5-minute time interval and the sum of all steps from all days at that specific time interval.
+Create a new data frame holding the 5-minute time interval and the sum of all steps from all days at that specific time interval. The first few lines of this data frame are output below.
 ```{r daily_activity}
 time_steps <- aggregate(steps ~ minutes, FUN = sum, data = df_activity)
 head(time_steps)
 ```
+
+Plot the average daily activity pattern. For each 5-minute interval, the steps over all days are averaged. The result for all 5-minute intervals in a day are plotted below. The maximum point is indicated in the plot.
 ```{r plot_daily_activity}
 # Find the maximum step time and value
 i_max <- which.max(time_steps[,2])
@@ -112,9 +114,7 @@ The maximum average daily steps is `r s_max`, occured at time `r t_max` and is d
 
 ## Imputing missing values
 Missing (NA) values with non-missing adjacent step values are linearly interpolated in
-time to impute their new value. After this, the first and last day's step values 
-remained missing. Their missing step values are imputed by using the time-of-day
-adjacent step values.
+time to impute their new value.
 ```{r impute_missing_values}
 # Count of NA in original step data
 num_na <- sum(df_activity$na_steps)
@@ -127,16 +127,15 @@ zz <- round(na.approx(df_activity$steps_interp, df_activity$interval, na.rm = FA
 # Replace only the remaining NA values
 df_activity$steps_interp[is.na(df_activity$steps_interp)] <- zz[is.na(df_activity$steps_interp)]
 
-## 
-matrix_time_by_steps_interp <- matrix(df_activity$steps_interp, nrow = 24*12, byrow = FALSE)
-# Total Steps for each day
-daily_steps_interp <- colSums(matrix_time_by_steps_interp)
+# Calculate the total # steps (imputed) for each day
+daily_steps_interp <- aggregate(steps_interp ~ date, FUN = sum, data = df_activity)
+head(daily_steps_interp)
 ```
 
+Plot a histogram showing the distribution of the total number of steps per day
 ```{r plot_imputed_values}
 # Histogram plot
-p <- ggplot(data.frame(x=daily_steps_interp, y=1:length(daily_steps_interp)), aes(x)) 
-p <- p + geom_histogram(binwidth = 1000)
+p <- qplot(steps_interp, data = daily_steps_interp, geom = "histogram", binwidth = 1000)
 p <- p + xlab("Daily Steps")                    # x-axis label
 p <- p + ylab("Count")                          # y-axis label
 p <- p + ggtitle(expression(atop("Histogram of Daily Steps",
@@ -146,8 +145,8 @@ print(p)
 
 ```{r}
 # Calculate the mean and median of the imputed data
-mean_daily_steps_interp <- sprintf("%.1f", mean(daily_steps_interp, na.rm = TRUE))
-median_daily_steps_interp <- sprintf("%d", median(daily_steps_interp, na.rm = TRUE))
+mean_daily_steps_interp <- sprintf("%.1f", mean(daily_steps_interp[,2]))
+median_daily_steps_interp <- sprintf("%d", median(daily_steps_interp[,2]))
 ```
   
 In the original data set, there are `r num_na` missing step values (indicated with NA).
@@ -167,21 +166,27 @@ ggplot() + geom_point(data=m, aes(x=time, y=steps, group=type, colour=type))
 ```
 
 ## Show the differences in activity patterns between weekdays and weekends
+A new field is added to identify the weekend/weekday entries. Then the df_activity 
+data.frame is minimized and the mean step values computed for {weekday, weekend} 
+and {minutes} into steps_by_day_interval. The head of the changed data frames are
+output.
 ```{r identify_weekday_weekend_diffs}
 # Identify the weekdays and weekends
 df_activity$weekday <- factor(weekdays(df_activity$time) %in% c('Saturday','Sunday'),
                               levels=c("TRUE", "FALSE"), 
                               labels=c("Weekend","Weekday"))
-
+head(df_activity)
 
 # Calculate the mean # steps for each weekday/interval pair
-# steps_by_day_interval <- aggregate(steps ~ interval + weekday, FUN = mean, data = m)
 steps_by_day_interval <- aggregate(steps ~ minutes + weekday, FUN = mean, data = df_activity)
+head(steps_by_day_interval)
 
 # Calculate the interval values for each 6-hour period
 t_breaks <- seq(1, max(df_activity$minutes)+5, length.out=5)
 ```
 
+
+Two plots to compare the average steps for each 5-minute interval on weekends and weekdays.
 ```{r plot_weekday_weekend_diffs}
 # Plot the weekend & weekday mean steps throughout the day
 p <- ggplot(steps_by_day_interval, aes(minutes, steps))
