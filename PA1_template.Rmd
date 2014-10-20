@@ -1,25 +1,190 @@
 ---
 title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
+author: "David Dessert"
+date: "Tuesday, October 14, 2014"
+output: html_document
+keep_md: true
 ---
 
+## Load necessary packages to execute
+```{r}
+library(reshape2)
+library(ggplot2)
+library(scales)
+library(zoo)
+```
 
-## Loading and preprocessing the data
+## Load and preprocessing the data
+The input data file is stored in the ./data subdirectory and
+is in a comma-separated variable format (.csv extension).
+The first row contains the header names {steps, date, interval}.
+```{r loading}
+inFile <- './data/activity.csv'
+df_activity <- read.csv(inFile)
+head(df_activity)
+```
+A time field is computed from the "date" and "interval".  
+"steps" that are NA are identified.
+```{r processing}
+# Calculate POSIX time from date and interval fields
+df_activity$time <- as.POSIXct(3600*floor(df_activity$interval/100)
+                               + 60*(df_activity$interval %% 100), 
+                               tz = "GMT", 
+                               origin = as.POSIXct(df_activity$date, tz = "GMT"))
+# Mark all NA fields
+df_activity$na_steps <- is.na(df_activity$steps)
+# Minutes within the day
+df_activity$minutes <- 60*floor(df_activity$interval/100) +
+                       (df_activity$interval %% 100)
+# Number of days within the record
+NUM_DAYS <- length(unique(df_activity$date))
+# Number of time intervals within a day
+NUM_INTERVALS_PER_DAY <- length(unique(df_activity$interval))
+head(df_activity)
+```
 
 
+## Find the total number of steps taken per day
+```{r total_steps_per_day}
+# Calculate the total # steps for each day
+daily_steps <- aggregate(steps ~ date, FUN = sum, data = df_activity)
+head(daily_steps)
 
-## What is mean total number of steps taken per day?
+# Histogram plot
+p <- qplot(steps, data = daily_steps, geom = "histogram", binwidth = 1000)
+p <- p + xlab("Daily Steps")                    # x-axis label
+p <- p + ylab("Count")                          # y-axis label
+p <- p + ggtitle("Histogram of Daily Steps")    # graph title
+print(p)
+```
 
+```{r}
+# Calculate the mean and median of the original data
+mean_daily_steps <- sprintf("%.1f", mean(daily_steps[,2]))
+median_daily_steps <- sprintf("%d", median(daily_steps[,2]))
+```
+The mean steps per day is `r mean_daily_steps`.  
+The median steps per day is `r median_daily_steps`.
 
+## Display the average daily activity pattern
+Create a new data frame holding the 5-minute time interval and the sum of all steps from all days at that specific time interval.
+```{r daily_activity}
+time_steps <- aggregate(steps ~ minutes, FUN = sum, data = df_activity)
+head(time_steps)
+```
+```{r plot_daily_activity}
+# Find the maximum step time and value
+i_max <- which.max(time_steps[,2])
+t_max <- sprintf("%2d:%02d", 
+                 floor(time_steps[i_max,1] / 60),
+                 time_steps[i_max,1] %% 60)
+s_max <- time_steps[i_max,2] / NUM_DAYS
 
-## What is the average daily activity pattern?
-
+# Plot the averages over time
+p <- ggplot(time_steps, aes(x=minutes, y=steps/NUM_DAYS))
+# Line graph
+p <- p + geom_line(size=1)
+# Red point for the maximum step time and value
+p <- p + annotate("point", x=time_steps$minutes[i_max], 
+                           y=s_max, 
+                           colour="red")
+# Text indicating the maximum step time and value
+p <- p + annotate("text", 
+                  x=time_steps$minutes[i_max], 
+                  y=s_max, 
+                  hjust=0,
+                  label=sprintf("  (%s, %.1f)", t_max, s_max),
+                  colour = "red")
+# Pretty up the x-axis
+# Calculate 5 even breaks on x-axis
+t_breaks <- seq(from=1, to=NUM_INTERVALS_PER_DAY, length.out=5);
+# Add the breaks and labels (that don't have the day information)
+p <- p + scale_x_continuous(breaks = time_steps$minutes[t_breaks],
+                            labels = c("00:00","06:00","12:00","18:00","24:00"))
+p <- p + xlab("Time of Day")                    # x-axis label
+p <- p + ylab("Steps")                          # y-axis label
+p <- p + ggtitle("Mean Steps by Time of Day")   # graph title
+print(p)
+```
+  
+The maximum average daily steps is `r s_max`, occured at time `r t_max` and is drawn in red.
 
 
 ## Imputing missing values
+Missing (NA) values with non-missing adjacent step values are linearly interpolated in
+time to impute their new value. After this, the first and last day's step values 
+remained missing. Their missing step values are imputed by using the time-of-day
+adjacent step values.
+```{r}
+# Count of NA in original step data
+num_na <- sum(df_activity$na_steps)
+# Use the zoo package to calculate interpolated NA values
+# Start with the original step data
+df_activity$steps_interp <- df_activity$steps
+# Fill in NA (imputed values)
+# Interpolate steps using the time of day (interval) value
+zz <- round(na.approx(df_activity$steps_interp, df_activity$interval, na.rm = FALSE))
+# Replace only the remaining NA values
+df_activity$steps_interp[is.na(df_activity$steps_interp)] <- zz[is.na(df_activity$steps_interp)]
 
+## 
+matrix_time_by_steps_interp <- matrix(df_activity$steps_interp, nrow = 24*12, byrow = FALSE)
+# Total Steps for each day
+daily_steps_interp <- colSums(matrix_time_by_steps_interp)
+# Histogram plot
+p <- ggplot(data.frame(x=daily_steps_interp, y=1:length(daily_steps_interp)), aes(x)) 
+p <- p + geom_histogram(binwidth = 1000)
+p <- p + xlab("Daily Steps")                    # x-axis label
+p <- p + ylab("Count")                          # y-axis label
+p <- p + ggtitle(expression(atop("Histogram of Daily Steps",
+                                 "NA's Interpolated")))     # graph title
+print(p)
+```
+```{r}
+# Calculate the mean and median of the imputed data
+mean_daily_steps_interp <- sprintf("%.1f", mean(daily_steps_interp, na.rm = TRUE))
+median_daily_steps_interp <- sprintf("%d", median(daily_steps_interp, na.rm = TRUE))
+```
+  
+In the original data set, there are `r num_na` missing step values (indicated with NA).
+After imputing the missing (NA) values, the mean steps per day is 
+`r mean_daily_steps_interp` versus `r mean_daily_steps` (raw data).  
+After imputing the missing (NA) values, the median steps per day is 
+`r median_daily_steps_interp` versus `r median_daily_steps` (raw data).  
 
+The following graph shows the original data steps and the newly imputed steps.
+```{r}
+m <- melt(df_activity, 
+          id.vars = "time", 
+          measure.vars = c("steps_interp","steps"),
+          variable.name = "type",
+          value.name = "steps")
+ggplot() + geom_point(data=m, aes(x=time, y=steps, group=type, colour=type))
+```
 
 ## Are there differences in activity patterns between weekdays and weekends?
+```{r}
+# Identify the weekdays and weekends
+df_activity$weekday <- factor(weekdays(df_activity$time) %in% c('Saturday','Sunday'),
+                              levels=c("TRUE", "FALSE"), 
+                              labels=c("Weekend","Weekday"))
+
+
+# Calculate the mean # steps for each weekday/interval pair
+# steps_by_day_interval <- aggregate(steps ~ interval + weekday, FUN = mean, data = m)
+steps_by_day_interval <- aggregate(steps ~ minutes + weekday, FUN = mean, data = df_activity)
+
+# Calculate the interval values for each 6-hour period
+t_breaks <- seq(1, max(df_activity$minutes)+5, length.out=5)
+
+# Plot the weekend & weekday mean steps throughout the day
+p <- ggplot(steps_by_day_interval, aes(minutes, steps))
+p <- p + geom_line()                            # line plot
+p <- p + facet_grid(weekday ~ .)                # Top/Bottom plot
+p <- p + scale_x_continuous(breaks = df_activity$minutes[t_breaks],
+                            labels = c("00:00","06:00","12:00","18:00","24:00"))
+p <- p + xlab("Time of Day")                    # x-axis label
+p <- p + ylab("Steps")                          # y-axis label
+p <- p + ggtitle("Mean Steps by Time of Day")   # graph title
+print(p)
+```
